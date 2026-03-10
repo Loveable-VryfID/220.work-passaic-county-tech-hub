@@ -11,7 +11,7 @@ const Footer = () => {
           <a href="https://ventures220.lovable.app" target="_blank" rel="noopener noreferrer" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
             220Ventures
           </a>
-          <a href="mailto:hello@220.work" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+          <a href="mailto:admin@vryfid.com" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
             Contact
           </a>
         </div>

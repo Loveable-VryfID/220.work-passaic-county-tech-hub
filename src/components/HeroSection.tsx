@@ -66,7 +66,7 @@ const HeroSection = () => {
           className="mt-16 flex justify-center gap-12 flex-wrap"
         >
           {[
-            { value: "15 min", label: "from NYC" },
+            { value: "<1 hr", label: "from NYC" },
             { value: "100+", label: "Seats" },
             { value: "∞", label: "Potential" },
           ].map((stat) => (

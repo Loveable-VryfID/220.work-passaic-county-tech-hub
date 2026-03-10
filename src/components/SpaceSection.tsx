@@ -7,7 +7,7 @@ const amenities = [
   { icon: Monitor, label: "Dedicated desks & private offices" },
   { icon: Wifi, label: "High-speed fiber internet" },
   { icon: Coffee, label: "Event space for 100+ people" },
-  { icon: MapPin, label: "15 min from NYC by train" },
+  { icon: MapPin, label: "Under an hour from NYC by train" },
   { icon: Clock, label: "Incubator program (coming soon)" },
 ];
 

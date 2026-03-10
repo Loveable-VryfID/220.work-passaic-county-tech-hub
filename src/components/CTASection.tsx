@@ -26,7 +26,7 @@ const CTASection = () => {
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button variant="hero" size="lg" asChild>
-              <a href="mailto:hello@220.work">
+              <a href="mailto:admin@vryfid.com">
                 Get in Touch <ArrowRight size={18} />
               </a>
             </Button>

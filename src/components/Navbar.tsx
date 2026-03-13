@@ -17,9 +17,8 @@ const Navbar = () => {
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border">
       <div className="container mx-auto flex items-center justify-between h-16 px-4">
-        <a href="#" className="text-xl font-bold font-display">
-          <span className="text-gradient">220</span>
-          <span className="text-foreground">.work</span>
+        <a href="#" className="flex items-center">
+          <img src={logo} alt="220.work" className="h-8" />
         </a>
 
         <div className="hidden md:flex items-center gap-8">

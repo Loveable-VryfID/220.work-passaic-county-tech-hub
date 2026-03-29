@@ -52,7 +52,7 @@ const HeroSection = () => {
           className="flex flex-col sm:flex-row gap-4 justify-center"
         >
           <Button variant="hero" size="lg" asChild>
-            <a href="#contact">Join the Waitlist</a>
+            <a href="/coworking">Join the Waitlist</a>
           </Button>
           <Button variant="heroOutline" size="lg" asChild>
             <a href="#about">Learn More</a>

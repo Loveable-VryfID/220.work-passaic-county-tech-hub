@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fraud Cost Calculator | 220.work &amp; VryfID</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0d0d0d;
+    --bg-card: #161616;
+    --bg-card-hover: #1c1c1c;
+    --orange: #f5a623;
+    --orange-dim: rgba(245, 166, 35, 0.15);
+    --orange-glow: rgba(245, 166, 35, 0.3);
+    --white: #ffffff;
+    --gray: #999999;
+    --gray-light: #cccccc;
+    --gray-dark: #333333;
+    --radius: 12px;
+    --transition: 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background: var(--bg);
+    color: var(--white);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 20px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .container {
+    width: 100%;
+    max-width: 680px;
+  }
+
+  /* Header */
+  .header {
+    text-align: center;
+    margin-bottom: 48px;
+  }
+  .header h1 {
+    font-size: clamp(28px, 5vw, 40px);
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    margin-bottom: 12px;
+  }
+  .header h1 span { color: var(--orange); }
+  .header p {
+    color: var(--gray);
+    font-size: 16px;
+    max-width: 480px;
+    margin: 0 auto;
+  }
+
+  /* Progress */
+  .progress-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 40px;
+  }
+  .progress-segment {
+    flex: 1;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--gray-dark);
+    transition: background var(--transition);
+  }
+  .progress-segment.active {
+    background: var(--orange);
+  }
+
+  /* Steps */
+  .step {
+    display: none;
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  .step.active {
+    display: block;
+    animation: fadeInUp 0.5s var(--transition) forwards;
+  }
+  @keyframes fadeInUp {
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .step-label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--orange);
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .step h2 {
+    font-size: clamp(22px, 4vw, 30px);
+    font-weight: 700;
+    margin-bottom: 32px;
+  }
+
+  /* Slider groups */
+  .slider-group {
+    margin-bottom: 32px;
+  }
+  .slider-group label {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 12px;
+    font-size: 15px;
+    font-weight: 500;
+  }
+  .slider-group .value {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--orange);
+    font-variant-numeric: tabular-nums;
+  }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--gray-dark);
+    outline: none;
+    cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--orange);
+    border: 3px solid var(--bg);
+    box-shadow: 0 0 0 2px var(--orange);
+    cursor: pointer;
+    transition: transform 0.15s ease;
+  }
+  input[type="range"]::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--orange);
+    border: 3px solid var(--bg);
+    box-shadow: 0 0 0 2px var(--orange);
+    cursor: pointer;
+  }
+
+  /* Checkboxes */
+  .checkbox-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+  @media (max-width: 500px) {
+    .checkbox-grid { grid-template-columns: 1fr; }
+  }
+  .checkbox-item {
+    background: var(--bg-card);
+    border: 1px solid var(--gray-dark);
+    border-radius: var(--radius);
+    padding: 16px;
+    cursor: pointer;
+    transition: all var(--transition);
+    user-select: none;
+    position: relative;
+  }
+  .checkbox-item:hover {
+    background: var(--bg-card-hover);
+    border-color: #444;
+  }
+  .checkbox-item.checked {
+    background: var(--orange-dim);
+    border-color: var(--orange);
+  }
+  .checkbox-item input {
+    display: none;
+  }
+  .checkbox-item .check-icon {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--gray-dark);
+    border-radius: 4px;
+    transition: all var(--transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .checkbox-item.checked .check-icon {
+    background: var(--orange);
+    border-color: var(--orange);
+  }
+  .checkbox-item.checked .check-icon::after {
+    content: '';
+    width: 6px;
+    height: 10px;
+    border: solid var(--bg);
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+    margin-top: -2px;
+  }
+  .checkbox-item .cb-label {
+    font-size: 14px;
+    font-weight: 600;
+    padding-right: 28px;
+  }
+  .checkbox-item .cb-desc {
+    font-size: 12px;
+    color: var(--gray);
+    margin-top: 4px;
+  }
+
+  /* Buttons */
+  .btn-row {
+    display: flex;
+    gap: 12px;
+    margin-top: 12px;
+  }
+  .btn {
+    flex: 1;
+    padding: 16px 28px;
+    border-radius: var(--radius);
+    font-size: 16px;
+    font-weight: 700;
+    border: none;
+    cursor: pointer;
+    transition: all var(--transition);
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+  }
+  .btn-primary {
+    background: var(--orange);
+    color: var(--bg);
+  }
+  .btn-primary:hover {
+    filter: brightness(1.1);
+    transform: translateY(-1px);
+    box-shadow: 0 8px 24px var(--orange-glow);
+  }
+  .btn-secondary {
+    background: var(--gray-dark);
+    color: var(--white);
+  }
+  .btn-secondary:hover {
+    background: #444;
+  }
+
+  /* Results */
+  .results-hero {
+    text-align: center;
+    margin-bottom: 40px;
+    padding: 40px 24px;
+    background: linear-gradient(135deg, rgba(245,166,35,0.08), rgba(245,166,35,0.02));
+    border: 1px solid rgba(245,166,35,0.2);
+    border-radius: 16px;
+  }
+  .results-hero .results-label {
+    font-size: 14px;
+    color: var(--gray);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    font-weight: 600;
+    margin-bottom: 12px;
+  }
+  .results-hero .big-number {
+    font-size: clamp(42px, 8vw, 64px);
+    font-weight: 900;
+    color: var(--orange);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+  }
+  .results-hero .subtitle {
+    color: var(--gray);
+    font-size: 14px;
+    margin-top: 8px;
+  }
+
+  .breakdown {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+  @media (max-width: 500px) {
+    .breakdown { grid-template-columns: 1fr; }
+  }
+  .breakdown-item {
+    background: var(--bg-card);
+    border: 1px solid var(--gray-dark);
+    border-radius: var(--radius);
+    padding: 20px;
+  }
+  .breakdown-item .bd-label {
+    font-size: 12px;
+    color: var(--gray);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .breakdown-item .bd-value {
+    font-size: 24px;
+    font-weight: 800;
+    color: var(--white);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .protect-banner {
+    background: linear-gradient(135deg, rgba(245,166,35,0.12), rgba(245,166,35,0.04));
+    border: 1px solid rgba(245,166,35,0.25);
+    border-radius: var(--radius);
+    padding: 28px;
+    text-align: center;
+    margin-bottom: 24px;
+  }
+  .protect-banner .shield {
+    font-size: 36px;
+    margin-bottom: 12px;
+  }
+  .protect-banner .protect-text {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .protect-banner .protect-text span {
+    color: var(--orange);
+  }
+  .protect-banner .protect-saved {
+    font-size: 28px;
+    font-weight: 900;
+    color: var(--orange);
+    margin-top: 8px;
+  }
+
+  .cta-btn {
+    display: block;
+    width: 100%;
+    padding: 20px;
+    background: var(--orange);
+    color: var(--bg);
+    font-size: 18px;
+    font-weight: 800;
+    border: none;
+    border-radius: var(--radius);
+    cursor: pointer;
+    text-decoration: none;
+    text-align: center;
+    transition: all var(--transition);
+    margin-bottom: 12px;
+  }
+  .cta-btn:hover {
+    filter: brightness(1.1);
+    transform: translateY(-2px);
+    box-shadow: 0 12px 32px var(--orange-glow);
+  }
+
+  .restart-link {
+    display: block;
+    text-align: center;
+    color: var(--gray);
+    font-size: 14px;
+    cursor: pointer;
+    transition: color var(--transition);
+    background: none;
+    border: none;
+    width: 100%;
+    padding: 8px;
+  }
+  .restart-link:hover { color: var(--white); }
+
+  /* Footer */
+  .footer {
+    margin-top: 48px;
+    text-align: center;
+    color: var(--gray);
+    font-size: 12px;
+  }
+  .footer a { color: var(--orange); text-decoration: none; }
+  .footer a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <div class="header">
+    <h1>Fraud Cost <span>Calculator</span></h1>
+    <p>See how much fraud could be costing your property management business every year.</p>
+  </div>
+
+  <div class="progress-bar">
+    <div class="progress-segment active" id="prog-1"></div>
+    <div class="progress-segment" id="prog-2"></div>
+    <div class="progress-segment" id="prog-3"></div>
+  </div>
+
+  <!-- STEP 1 -->
+  <div class="step active" id="step-1">
+    <div class="step-label">Step 1 of 3</div>
+    <h2>Tell us about your portfolio</h2>
+
+    <div class="slider-group">
+      <label>Number of units you manage <span class="value" id="units-val">50</span></label>
+      <input type="range" id="units" min="1" max="500" value="50">
+    </div>
+
+    <div class="slider-group">
+      <label>Average monthly rent <span class="value" id="rent-val">$1,500</span></label>
+      <input type="range" id="rent" min="500" max="10000" step="50" value="1500">
+    </div>
+
+    <div class="slider-group">
+      <label>Applications per month <span class="value" id="apps-val">20</span></label>
+      <input type="range" id="apps" min="1" max="100" value="20">
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="goToStep(2)">Continue</button>
+    </div>
+  </div>
+
+  <!-- STEP 2 -->
+  <div class="step" id="step-2">
+    <div class="step-label">Step 2 of 3</div>
+    <h2>Where does fraud hit you?</h2>
+
+    <div class="checkbox-grid" id="fraud-types">
+      <div class="checkbox-item checked" data-risk="18" onclick="toggleCheck(this)">
+        <input type="checkbox" checked>
+        <div class="check-icon"></div>
+        <div class="cb-label">Fake pay stubs</div>
+        <div class="cb-desc">Fabricated income documentation</div>
+      </div>
+      <div class="checkbox-item checked" data-risk="16" onclick="toggleCheck(this)">
+        <input type="checkbox" checked>
+        <div class="check-icon"></div>
+        <div class="cb-label">Altered bank statements</div>
+        <div class="cb-desc">Manipulated financial records</div>
+      </div>
+      <div class="checkbox-item" data-risk="12" onclick="toggleCheck(this)">
+        <input type="checkbox">
+        <div class="check-icon"></div>
+        <div class="cb-label">Fabricated employment letters</div>
+        <div class="cb-desc">False employer verification</div>
+      </div>
+      <div class="checkbox-item" data-risk="22" onclick="toggleCheck(this)">
+        <input type="checkbox">
+        <div class="check-icon"></div>
+        <div class="cb-label">Identity fraud</div>
+        <div class="cb-desc">Stolen or synthetic identities</div>
+      </div>
+      <div class="checkbox-item" data-risk="15" onclick="toggleCheck(this)">
+        <input type="checkbox">
+        <div class="check-icon"></div>
+        <div class="cb-label">Eviction history hidden</div>
+        <div class="cb-desc">Concealed prior evictions</div>
+      </div>
+      <div class="checkbox-item" data-risk="10" onclick="toggleCheck(this)">
+        <input type="checkbox">
+        <div class="check-icon"></div>
+        <div class="cb-label">Prior landlord fraud</div>
+        <div class="cb-desc">Fake references from past landlords</div>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="goToStep(1)">Back</button>
+      <button class="btn btn-primary" onclick="calculateAndShow()">See My Results</button>
+    </div>
+  </div>
+
+  <!-- STEP 3 -->
+  <div class="step" id="step-3">
+    <div class="step-label">Your Results</div>
+    <h2>Here's what fraud could cost you</h2>
+
+    <div class="results-hero">
+      <div class="results-label">Estimated Annual Fraud Exposure</div>
+      <div class="big-number" id="total-exposure">$0</div>
+      <div class="subtitle">based on your portfolio and risk profile</div>
+    </div>
+
+    <div class="breakdown">
+      <div class="breakdown-item">
+        <div class="bd-label">Lost Rent</div>
+        <div class="bd-value" id="bd-rent">$0</div>
+      </div>
+      <div class="breakdown-item">
+        <div class="bd-label">Legal &amp; Eviction Costs</div>
+        <div class="bd-value" id="bd-legal">$0</div>
+      </div>
+      <div class="breakdown-item">
+        <div class="bd-label">Vacancy Costs</div>
+        <div class="bd-value" id="bd-vacancy">$0</div>
+      </div>
+      <div class="breakdown-item">
+        <div class="bd-label">Time Wasted</div>
+        <div class="bd-value" id="bd-time">$0</div>
+      </div>
+    </div>
+
+    <div class="protect-banner">
+      <div class="shield">&#128737;</div>
+      <div class="protect-text">With <span>VryfID</span>, you could protect up to <span>94%</span> of this</div>
+      <div class="protect-saved" id="savings-amount">$0</div>
+    </div>
+
+    <a href="https://vryfid.com" target="_blank" rel="noopener" class="cta-btn">Get Protected &mdash; Start Free</a>
+    <button class="restart-link" onclick="goToStep(1)">Start over with different numbers</button>
+  </div>
+
+  <div class="footer">
+    Powered by <a href="https://220.work" target="_blank" rel="noopener">220.work</a> &amp; <a href="https://vryfid.com" target="_blank" rel="noopener">VryfID</a>
+  </div>
+</div>
+
+<script>
+  // Slider live updates
+  const unitSlider = document.getElementById('units');
+  const rentSlider = document.getElementById('rent');
+  const appsSlider = document.getElementById('apps');
+
+  unitSlider.addEventListener('input', function() {
+    document.getElementById('units-val').textContent = Number(this.value).toLocaleString();
+  });
+  rentSlider.addEventListener('input', function() {
+    document.getElementById('rent-val').textContent = '$' + Number(this.value).toLocaleString();
+  });
+  appsSlider.addEventListener('input', function() {
+    document.getElementById('apps-val').textContent = Number(this.value).toLocaleString();
+  });
+
+  // Checkbox toggle
+  function toggleCheck(el) {
+    el.classList.toggle('checked');
+    var cb = el.querySelector('input');
+    cb.checked = !cb.checked;
+  }
+
+  // Navigation
+  function goToStep(n) {
+    document.querySelectorAll('.step').forEach(function(s) {
+      s.classList.remove('active');
+    });
+    document.getElementById('step-' + n).classList.add('active');
+
+    for (var i = 1; i <= 3; i++) {
+      var seg = document.getElementById('prog-' + i);
+      if (i <= n) seg.classList.add('active');
+      else seg.classList.remove('active');
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  // Calculation
+  function calculateAndShow() {
+    var units = parseInt(unitSlider.value);
+    var rent = parseInt(rentSlider.value);
+    var appsPerMonth = parseInt(appsSlider.value);
+
+    // Sum risk weights from checked items
+    var totalRisk = 0;
+    var checkedCount = 0;
+    document.querySelectorAll('.checkbox-item').forEach(function(item) {
+      if (item.classList.contains('checked')) {
+        totalRisk += parseInt(item.getAttribute('data-risk'));
+        checkedCount++;
+      }
+    });
+
+    // If nothing selected, use a small baseline
+    if (checkedCount === 0) {
+      totalRisk = 5;
+    }
+
+    // Risk multiplier: percentage of applications that could be fraudulent
+    var fraudRate = totalRisk / 100;
+
+    // Fraudulent applications per year
+    var fraudAppsPerYear = appsPerMonth * 12 * fraudRate;
+
+    // Lost rent: ~3 months of rent per fraudulent tenant that slips through
+    // Not all fraud apps become tenants; assume 40% success rate
+    var fraudTenants = fraudAppsPerYear * 0.4;
+    var lostRent = Math.round(fraudTenants * rent * 3);
+
+    // Legal/eviction costs: ~$3,500 average per eviction
+    var legalCosts = Math.round(fraudTenants * 3500);
+
+    // Vacancy costs: 1.5 months rent per unit turned over due to fraud
+    var vacancyCosts = Math.round(fraudTenants * rent * 1.5);
+
+    // Time wasted: ~$150/hr, ~8 hours per fraud case for all fraud apps
+    var timeCosts = Math.round(fraudAppsPerYear * 8 * 150);
+
+    var totalExposure = lostRent + legalCosts + vacancyCosts + timeCosts;
+
+    // Ensure minimum plausible result
+    if (totalExposure < 500) totalExposure = Math.max(units * 50, 500);
+
+    var savings = Math.round(totalExposure * 0.94);
+
+    goToStep(3);
+
+    // Animate numbers
+    animateValue('total-exposure', totalExposure, 1500);
+    animateValue('bd-rent', lostRent, 1200);
+    animateValue('bd-legal', legalCosts, 1200);
+    animateValue('bd-vacancy', vacancyCosts, 1200);
+    animateValue('bd-time', timeCosts, 1200);
+    animateValue('savings-amount', savings, 1600);
+  }
+
+  function animateValue(elementId, target, duration) {
+    var el = document.getElementById(elementId);
+    var start = 0;
+    var startTime = null;
+
+    function step(timestamp) {
+      if (!startTime) startTime = timestamp;
+      var progress = Math.min((timestamp - startTime) / duration, 1);
+      // Ease out cubic
+      var eased = 1 - Math.pow(1 - progress, 3);
+      var current = Math.round(eased * target);
+      el.textContent = '$' + current.toLocaleString();
+      if (progress < 1) {
+        requestAnimationFrame(step);
+      }
+    }
+    requestAnimationFrame(step);
+  }
+</script>
+
+</body>
+</html>

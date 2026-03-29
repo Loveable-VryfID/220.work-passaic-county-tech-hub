@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowDown } from "lucide-react";
 import heroBg from "@/assets/hero-bg.jpg";
@@ -52,7 +53,7 @@ const HeroSection = () => {
           className="flex flex-col sm:flex-row gap-4 justify-center"
         >
           <Button variant="hero" size="lg" asChild>
-            <a href="/coworking">Join the Waitlist</a>
+            <Link to="/coworking">Join the Waitlist</Link>
           </Button>
           <Button variant="heroOutline" size="lg" asChild>
             <a href="#about">Learn More</a>

@@ -40,11 +40,12 @@ const Coworking = () => {
   const { toast } = useToast();
   const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setSubmitting(true);
 
-    const formData = new FormData(e.currentTarget);
+    const form = e.currentTarget;
+    const formData = new FormData(form);
     const name = formData.get("name") as string;
     const email = formData.get("email") as string;
 
@@ -58,15 +59,41 @@ const Coworking = () => {
       return;
     }
 
-    // Simulate submission
-    setTimeout(() => {
+    try {
+      const response = await fetch("/api/waitlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          email,
+          phone: (formData.get("phone") as string) ?? "",
+          interest: (formData.get("interest") as string) ?? "",
+          message: (formData.get("message") as string) ?? "",
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || "Submission failed");
+      }
+
       toast({
         title: "You're on the list!",
         description: "We'll be in touch soon with next steps.",
       });
-      (e.target as HTMLFormElement).reset();
+      form.reset();
+    } catch (err) {
+      toast({
+        title: "Something went wrong",
+        description:
+          err instanceof Error
+            ? err.message
+            : "Please try again in a moment.",
+        variant: "destructive",
+      });
+    } finally {
       setSubmitting(false);
-    }, 600);
+    }
   };
 
   return (

@@ -1,213 +1,141 @@
-import { createClient, type RedisClientType } from "redis";
-
 // Vercel Function using the Web standard Request/Response signature.
 //
 // POST /api/waitlist
 //   Body: { name, email, phone?, interest?, message? }
-//   Pushes the signup onto the Redis list named "waitlist".
+//   Subscribes the signup to a Mailchimp audience.
 //
-// GET /api/waitlist
-//   Admin-only. Requires either an `Authorization: Bearer <ADMIN_TOKEN>`
-//   header or a `?token=<ADMIN_TOKEN>` query param. Returns the full list
-//   of signups as JSON, or as a downloadable CSV when `?format=csv`.
+// Required environment variables (set in the Vercel dashboard → Settings → Environment Variables):
+//   MAILCHIMP_API_KEY  — e.g. "abc123def456-us14"  (get one at Mailchimp → Account → Extras → API keys)
+//   MAILCHIMP_LIST_ID  — the audience ID (Mailchimp → Audience → Settings → Audience name and defaults)
+//
+// Optional:
+//   MAILCHIMP_DOUBLE_OPTIN — set to "true" to require an email confirmation before
+//                            the subscriber is added. Defaults to single opt-in.
 
-// Connects to the Redis database provisioned via the Vercel Marketplace.
-// The connection string is exposed as the REDIS_URL env var.
-//
-// In serverless we create a fresh client per request and disconnect when
-// done. This avoids cached-connection issues (stale sockets across cold
-// starts, half-open connections, reconnect storms) at the cost of ~100ms
-// of connection overhead per request — a fine tradeoff for low-volume
-// waitlist signups.
-async function withRedis<T>(
-  work: (client: RedisClientType) => Promise<T>,
-): Promise<T> {
-  const url = process.env.REDIS_URL;
-  if (!url) {
-    throw new Error(
-      "REDIS_URL is not set. Connect a Redis database to this project in the Vercel dashboard (Storage tab).",
-    );
-  }
-  const client: RedisClientType = createClient({
-    url,
-    socket: {
-      connectTimeout: 5000,
-      // Fail fast instead of retrying forever, which would hang the
-      // serverless function until Vercel's timeout kills it with no
-      // useful error reaching the client.
-      reconnectStrategy: false,
-    },
-  });
-  client.on("error", (err) => console.error("Redis client error:", err));
-  try {
-    await client.connect();
-    return await work(client);
-  } finally {
-    // Best-effort cleanup. disconnect() is fire-and-forget; swallow any
-    // errors so we never mask the real error from `work`.
-    void client.disconnect().catch(() => undefined);
-  }
+type SubscribeStatus = "subscribed" | "pending";
+
+interface MailchimpError {
+  title?: string;
+  detail?: string;
+  status?: number;
 }
 
 export default async function handler(request: Request): Promise<Response> {
-  if (request.method === "GET") {
-    return handleGet(request);
+  if (request.method !== "POST") {
+    return json({ error: "Method not allowed" }, 405, { Allow: "POST" });
   }
-  if (request.method === "POST") {
-    return handlePost(request);
-  }
-  return new Response(JSON.stringify({ error: "Method not allowed" }), {
-    status: 405,
-    headers: { "Content-Type": "application/json", Allow: "GET, POST" },
-  });
-}
 
-async function handlePost(request: Request): Promise<Response> {
+  const apiKey = process.env.MAILCHIMP_API_KEY;
+  const listId = process.env.MAILCHIMP_LIST_ID;
+  if (!apiKey || !listId) {
+    return json(
+      {
+        error:
+          "Mailchimp is not configured. Set MAILCHIMP_API_KEY and MAILCHIMP_LIST_ID in the Vercel dashboard.",
+      },
+      503,
+    );
+  }
+
+  // The Mailchimp API key has the form "<hash>-<datacenter>", e.g. "abc123-us14".
+  // The datacenter prefix determines the API hostname.
+  const dcMatch = apiKey.match(/-([a-z]+\d+)$/i);
+  if (!dcMatch) {
+    return json(
+      { error: "MAILCHIMP_API_KEY is missing its datacenter suffix (e.g. '-us14')." },
+      500,
+    );
+  }
+  const dc = dcMatch[1];
+
   let payload: Record<string, unknown>;
   try {
     payload = await request.json();
   } catch {
-    return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
-      status: 400,
-      headers: { "Content-Type": "application/json" },
-    });
+    return json({ error: "Invalid JSON body" }, 400);
   }
 
   const email = typeof payload.email === "string" ? payload.email.trim() : "";
   const name = typeof payload.name === "string" ? payload.name.trim() : "";
+  const phone = typeof payload.phone === "string" ? payload.phone.trim() : "";
+  const interest =
+    typeof payload.interest === "string" ? payload.interest.trim() : "";
+  const message =
+    typeof payload.message === "string" ? payload.message.trim() : "";
 
   const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!email || !emailPattern.test(email)) {
-    return new Response(
-      JSON.stringify({ error: "A valid email is required" }),
-      { status: 400, headers: { "Content-Type": "application/json" } },
-    );
+    return json({ error: "A valid email is required" }, 400);
   }
+
+  // Split "Jane Doe" into FNAME / LNAME for Mailchimp's default merge fields.
+  const [firstName, ...rest] = name.split(/\s+/);
+  const lastName = rest.join(" ");
+  const mergeFields: Record<string, string> = {};
+  if (firstName) mergeFields.FNAME = firstName;
+  if (lastName) mergeFields.LNAME = lastName;
+  if (phone) mergeFields.PHONE = phone;
+
+  const status: SubscribeStatus =
+    process.env.MAILCHIMP_DOUBLE_OPTIN === "true" ? "pending" : "subscribed";
+
+  const tags: string[] = [];
+  if (interest) tags.push(`interest:${interest}`);
+
+  // Mailchimp has no standard "message" field. Stash it in a NOTES merge field
+  // when present; Mailchimp silently ignores unknown merge fields, so this is
+  // safe even if the audience doesn't have a NOTES field configured.
+  if (message) mergeFields.NOTES = message;
+
+  const url = `https://${dc}.api.mailchimp.com/3.0/lists/${listId}/members`;
+  const auth = Buffer.from(`anystring:${apiKey}`).toString("base64");
 
   try {
-    await withRedis((client) =>
-      client.rPush(
-        "waitlist",
-        JSON.stringify({
-          email,
-          name,
-          phone: typeof payload.phone === "string" ? payload.phone : "",
-          interest:
-            typeof payload.interest === "string" ? payload.interest : "",
-          message: typeof payload.message === "string" ? payload.message : "",
-          submittedAt: new Date().toISOString(),
-        }),
-      ),
-    );
-  } catch (err) {
-    console.error("Failed to write waitlist signup to Redis", err);
-    const detail = err instanceof Error ? err.message : String(err);
-    return new Response(
-      JSON.stringify({
-        error: "Could not save signup. Please try again.",
-        detail,
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${auth}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        email_address: email,
+        status,
+        merge_fields: mergeFields,
+        tags,
       }),
-      { status: 500, headers: { "Content-Type": "application/json" } },
-    );
-  }
-
-  return new Response(JSON.stringify({ ok: true }), {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-  });
-}
-
-async function handleGet(request: Request): Promise<Response> {
-  const adminToken = process.env.ADMIN_TOKEN;
-  if (!adminToken) {
-    return new Response(
-      JSON.stringify({
-        error:
-          "ADMIN_TOKEN environment variable is not set. Configure it in the Vercel dashboard to enable waitlist reads.",
-      }),
-      { status: 503, headers: { "Content-Type": "application/json" } },
-    );
-  }
-
-  const url = new URL(request.url);
-  const headerToken = request.headers
-    .get("authorization")
-    ?.replace(/^Bearer\s+/i, "");
-  const queryToken = url.searchParams.get("token");
-  const providedToken = headerToken || queryToken || "";
-
-  if (providedToken !== adminToken) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-
-  try {
-    const raw = await withRedis((client) => client.lRange("waitlist", 0, -1));
-    const entries = raw.map((item) => {
-      if (typeof item !== "string") return item;
-      try {
-        return JSON.parse(item);
-      } catch {
-        return item;
-      }
     });
 
-    const format = url.searchParams.get("format")?.toLowerCase();
-    if (format === "csv") {
-      return new Response(entriesToCsv(entries), {
-        status: 200,
-        headers: {
-          "Content-Type": "text/csv; charset=utf-8",
-          "Content-Disposition": 'attachment; filename="waitlist.csv"',
-          "Cache-Control": "no-store",
-        },
-      });
+    if (response.ok) {
+      return json({ ok: true }, 200);
     }
 
-    return new Response(
-      JSON.stringify({ count: entries.length, entries }, null, 2),
+    const errorBody = (await response.json().catch(() => ({}))) as MailchimpError;
+
+    // Mailchimp returns 400 with title "Member Exists" when the email is
+    // already on the list. Treat that as success from the user's perspective —
+    // they're already signed up.
+    if (errorBody.title === "Member Exists") {
+      return json({ ok: true, alreadySubscribed: true }, 200);
+    }
+
+    console.error("Mailchimp subscribe failed", response.status, errorBody);
+    return json(
       {
-        status: 200,
-        headers: {
-          "Content-Type": "application/json",
-          "Cache-Control": "no-store",
-        },
+        error: "Could not save signup. Please try again.",
+        detail: errorBody.detail || errorBody.title || `HTTP ${response.status}`,
       },
+      502,
     );
   } catch (err) {
-    console.error("Failed to read waitlist from Redis", err);
+    console.error("Failed to reach Mailchimp", err);
     const detail = err instanceof Error ? err.message : String(err);
-    return new Response(
-      JSON.stringify({ error: "Could not read waitlist.", detail }),
-      { status: 500, headers: { "Content-Type": "application/json" } },
-    );
+    return json({ error: "Could not save signup. Please try again.", detail }, 500);
   }
 }
 
-// Build an Excel-friendly CSV. Prepends a UTF-8 BOM so Excel detects encoding
-// correctly, and escapes any field containing quotes, commas, or newlines.
-function entriesToCsv(entries: unknown[]): string {
-  const columns = [
-    "submittedAt",
-    "name",
-    "email",
-    "phone",
-    "interest",
-    "message",
-  ];
-  const escape = (value: unknown): string => {
-    const str = value == null ? "" : String(value);
-    return /[",\n\r]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
-  };
-  const header = columns.join(",");
-  const rows = entries.map((entry) => {
-    const record = (entry && typeof entry === "object" ? entry : {}) as Record<
-      string,
-      unknown
-    >;
-    return columns.map((col) => escape(record[col])).join(",");
+function json(body: unknown, status: number, extraHeaders: Record<string, string> = {}): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json", ...extraHeaders },
   });
-  return "\uFEFF" + [header, ...rows].join("\r\n") + "\r\n";
 }

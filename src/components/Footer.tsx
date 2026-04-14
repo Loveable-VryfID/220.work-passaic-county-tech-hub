@@ -8,7 +8,7 @@ const Footer = () => {
           <span className="text-muted-foreground ml-2">· Passaic County, NJ</span>
         </p>
         <div className="flex gap-6">
-          <a href="https://ventures220.lovable.app" target="_blank" rel="noopener noreferrer" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+          <a href="https://220ventures.com" target="_blank" rel="noopener noreferrer" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
             220Ventures
           </a>
           <a href="mailto:admin@vryfid.com" className="text-sm text-muted-foreground hover:text-foreground transition-colors">

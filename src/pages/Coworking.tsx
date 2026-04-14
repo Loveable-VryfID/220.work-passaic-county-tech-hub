@@ -40,7 +40,7 @@ const Coworking = () => {
   const { toast } = useToast();
   const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setSubmitting(true);
 
@@ -59,54 +59,15 @@ const Coworking = () => {
       return;
     }
 
-    // Hard timeout so the button never gets permanently stuck if the API
-    // hangs (e.g. a Redis connection that never completes).
-    const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), 15000);
-
-    try {
-      const response = await fetch("/api/waitlist", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: controller.signal,
-        body: JSON.stringify({
-          name,
-          email,
-          phone: (formData.get("phone") as string) ?? "",
-          interest: (formData.get("interest") as string) ?? "",
-          message: (formData.get("message") as string) ?? "",
-        }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        const message =
-          [data.error, data.detail].filter(Boolean).join(" — ") ||
-          `Submission failed (HTTP ${response.status})`;
-        throw new Error(message);
-      }
-
+    // Simulate submission
+    setTimeout(() => {
       toast({
         title: "You're on the list!",
         description: "We'll be in touch soon with next steps.",
       });
       form.reset();
-    } catch (err) {
-      const description =
-        err instanceof DOMException && err.name === "AbortError"
-          ? "The request took too long. Please try again."
-          : err instanceof Error
-            ? err.message
-            : "Please try again in a moment.";
-      toast({
-        title: "Something went wrong",
-        description,
-        variant: "destructive",
-      });
-    } finally {
-      window.clearTimeout(timeoutId);
       setSubmitting(false);
-    }
+    }, 600);
   };
 
   return (

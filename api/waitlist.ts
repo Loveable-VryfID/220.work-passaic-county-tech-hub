@@ -1,15 +1,35 @@
-import { kv } from "@vercel/kv";
+import { createClient, type RedisClientType } from "redis";
 
 // Vercel Function using the Web standard Request/Response signature.
 //
 // POST /api/waitlist
 //   Body: { name, email, phone?, interest?, message? }
-//   Pushes the signup onto the KV list named "waitlist".
+//   Pushes the signup onto the Redis list named "waitlist".
 //
 // GET /api/waitlist
 //   Admin-only. Requires either an `Authorization: Bearer <ADMIN_TOKEN>`
 //   header or a `?token=<ADMIN_TOKEN>` query param. Returns the full list
-//   of signups as JSON.
+//   of signups as JSON, or as a downloadable CSV when `?format=csv`.
+
+// Connects to the Redis database provisioned via the Vercel Marketplace
+// (Upstash). The connection string is exposed as the REDIS_URL env var.
+let cachedClient: RedisClientType | null = null;
+
+async function getRedisClient(): Promise<RedisClientType> {
+  if (cachedClient?.isOpen) return cachedClient;
+  const url = process.env.REDIS_URL;
+  if (!url) {
+    throw new Error(
+      "REDIS_URL is not set. Connect a Redis database to this project in the Vercel dashboard (Storage tab).",
+    );
+  }
+  const client: RedisClientType = createClient({ url });
+  client.on("error", (err) => console.error("Redis client error", err));
+  await client.connect();
+  cachedClient = client;
+  return client;
+}
+
 export default async function handler(request: Request): Promise<Response> {
   if (request.method === "GET") {
     return handleGet(request);
@@ -46,9 +66,8 @@ async function handlePost(request: Request): Promise<Response> {
   }
 
   try {
-    // Push the signup onto the "waitlist" list. We store a small JSON blob
-    // so we retain the accompanying form fields alongside the email.
-    await kv.rpush(
+    const client = await getRedisClient();
+    await client.rPush(
       "waitlist",
       JSON.stringify({
         email,
@@ -60,7 +79,7 @@ async function handlePost(request: Request): Promise<Response> {
       }),
     );
   } catch (err) {
-    console.error("Failed to write waitlist signup to KV", err);
+    console.error("Failed to write waitlist signup to Redis", err);
     return new Response(
       JSON.stringify({ error: "Could not save signup. Please try again." }),
       { status: 500, headers: { "Content-Type": "application/json" } },
@@ -100,9 +119,9 @@ async function handleGet(request: Request): Promise<Response> {
   }
 
   try {
-    const raw = await kv.lrange<string>("waitlist", 0, -1);
+    const client = await getRedisClient();
+    const raw = await client.lRange("waitlist", 0, -1);
     const entries = raw.map((item) => {
-      // Items are stored as JSON strings; fall back to raw string if parse fails.
       if (typeof item !== "string") return item;
       try {
         return JSON.parse(item);
@@ -134,7 +153,7 @@ async function handleGet(request: Request): Promise<Response> {
       },
     );
   } catch (err) {
-    console.error("Failed to read waitlist from KV", err);
+    console.error("Failed to read waitlist from Redis", err);
     return new Response(
       JSON.stringify({ error: "Could not read waitlist." }),
       { status: 500, headers: { "Content-Type": "application/json" } },

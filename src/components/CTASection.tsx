@@ -31,7 +31,7 @@ const CTASection = () => {
               </a>
             </Button>
             <Button variant="heroOutline" size="lg" asChild>
-              <a href="https://ventures220.lovable.app" target="_blank" rel="noopener noreferrer">
+              <a href="https://220ventures.com" target="_blank" rel="noopener noreferrer">
                 220Ventures
               </a>
             </Button>

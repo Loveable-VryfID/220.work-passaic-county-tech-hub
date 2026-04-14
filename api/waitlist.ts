@@ -111,6 +111,18 @@ async function handleGet(request: Request): Promise<Response> {
       }
     });
 
+    const format = url.searchParams.get("format")?.toLowerCase();
+    if (format === "csv") {
+      return new Response(entriesToCsv(entries), {
+        status: 200,
+        headers: {
+          "Content-Type": "text/csv; charset=utf-8",
+          "Content-Disposition": 'attachment; filename="waitlist.csv"',
+          "Cache-Control": "no-store",
+        },
+      });
+    }
+
     return new Response(
       JSON.stringify({ count: entries.length, entries }, null, 2),
       {
@@ -128,4 +140,30 @@ async function handleGet(request: Request): Promise<Response> {
       { status: 500, headers: { "Content-Type": "application/json" } },
     );
   }
+}
+
+// Build an Excel-friendly CSV. Prepends a UTF-8 BOM so Excel detects encoding
+// correctly, and escapes any field containing quotes, commas, or newlines.
+function entriesToCsv(entries: unknown[]): string {
+  const columns = [
+    "submittedAt",
+    "name",
+    "email",
+    "phone",
+    "interest",
+    "message",
+  ];
+  const escape = (value: unknown): string => {
+    const str = value == null ? "" : String(value);
+    return /[",\n\r]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+  };
+  const header = columns.join(",");
+  const rows = entries.map((entry) => {
+    const record = (entry && typeof entry === "object" ? entry : {}) as Record<
+      string,
+      unknown
+    >;
+    return columns.map((col) => escape(record[col])).join(",");
+  });
+  return "\uFEFF" + [header, ...rows].join("\r\n") + "\r\n";
 }

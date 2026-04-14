@@ -11,23 +11,42 @@ import { createClient, type RedisClientType } from "redis";
 //   header or a `?token=<ADMIN_TOKEN>` query param. Returns the full list
 //   of signups as JSON, or as a downloadable CSV when `?format=csv`.
 
-// Connects to the Redis database provisioned via the Vercel Marketplace
-// (Upstash). The connection string is exposed as the REDIS_URL env var.
-let cachedClient: RedisClientType | null = null;
-
-async function getRedisClient(): Promise<RedisClientType> {
-  if (cachedClient?.isOpen) return cachedClient;
+// Connects to the Redis database provisioned via the Vercel Marketplace.
+// The connection string is exposed as the REDIS_URL env var.
+//
+// In serverless we create a fresh client per request and disconnect when
+// done. This avoids cached-connection issues (stale sockets across cold
+// starts, half-open connections, reconnect storms) at the cost of ~100ms
+// of connection overhead per request — a fine tradeoff for low-volume
+// waitlist signups.
+async function withRedis<T>(
+  work: (client: RedisClientType) => Promise<T>,
+): Promise<T> {
   const url = process.env.REDIS_URL;
   if (!url) {
     throw new Error(
       "REDIS_URL is not set. Connect a Redis database to this project in the Vercel dashboard (Storage tab).",
     );
   }
-  const client: RedisClientType = createClient({ url });
-  client.on("error", (err) => console.error("Redis client error", err));
-  await client.connect();
-  cachedClient = client;
-  return client;
+  const client: RedisClientType = createClient({
+    url,
+    socket: {
+      connectTimeout: 5000,
+      // Fail fast instead of retrying forever, which would hang the
+      // serverless function until Vercel's timeout kills it with no
+      // useful error reaching the client.
+      reconnectStrategy: false,
+    },
+  });
+  client.on("error", (err) => console.error("Redis client error:", err));
+  try {
+    await client.connect();
+    return await work(client);
+  } finally {
+    // Best-effort cleanup. disconnect() is fire-and-forget; swallow any
+    // errors so we never mask the real error from `work`.
+    void client.disconnect().catch(() => undefined);
+  }
 }
 
 export default async function handler(request: Request): Promise<Response> {
@@ -66,22 +85,28 @@ async function handlePost(request: Request): Promise<Response> {
   }
 
   try {
-    const client = await getRedisClient();
-    await client.rPush(
-      "waitlist",
-      JSON.stringify({
-        email,
-        name,
-        phone: typeof payload.phone === "string" ? payload.phone : "",
-        interest: typeof payload.interest === "string" ? payload.interest : "",
-        message: typeof payload.message === "string" ? payload.message : "",
-        submittedAt: new Date().toISOString(),
-      }),
+    await withRedis((client) =>
+      client.rPush(
+        "waitlist",
+        JSON.stringify({
+          email,
+          name,
+          phone: typeof payload.phone === "string" ? payload.phone : "",
+          interest:
+            typeof payload.interest === "string" ? payload.interest : "",
+          message: typeof payload.message === "string" ? payload.message : "",
+          submittedAt: new Date().toISOString(),
+        }),
+      ),
     );
   } catch (err) {
     console.error("Failed to write waitlist signup to Redis", err);
+    const detail = err instanceof Error ? err.message : String(err);
     return new Response(
-      JSON.stringify({ error: "Could not save signup. Please try again." }),
+      JSON.stringify({
+        error: "Could not save signup. Please try again.",
+        detail,
+      }),
       { status: 500, headers: { "Content-Type": "application/json" } },
     );
   }
@@ -119,8 +144,7 @@ async function handleGet(request: Request): Promise<Response> {
   }
 
   try {
-    const client = await getRedisClient();
-    const raw = await client.lRange("waitlist", 0, -1);
+    const raw = await withRedis((client) => client.lRange("waitlist", 0, -1));
     const entries = raw.map((item) => {
       if (typeof item !== "string") return item;
       try {
@@ -154,8 +178,9 @@ async function handleGet(request: Request): Promise<Response> {
     );
   } catch (err) {
     console.error("Failed to read waitlist from Redis", err);
+    const detail = err instanceof Error ? err.message : String(err);
     return new Response(
-      JSON.stringify({ error: "Could not read waitlist." }),
+      JSON.stringify({ error: "Could not read waitlist.", detail }),
       { status: 500, headers: { "Content-Type": "application/json" } },
     );
   }

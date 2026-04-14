@@ -64,9 +64,15 @@ const Coworking = () => {
     const timeoutId = window.setTimeout(() => controller.abort(), 15000);
 
     try {
-      const response = await fetch("/api/waitlist", {
+      // Formspree accepts direct browser POSTs. Sending `Accept: application/json`
+      // prevents Formspree from redirecting to their thank-you page so we can
+      // keep the in-page success toast.
+      const response = await fetch("https://formspree.io/f/xojyvjwq", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
         signal: controller.signal,
         body: JSON.stringify({
           name,
@@ -74,13 +80,21 @@ const Coworking = () => {
           phone: (formData.get("phone") as string) ?? "",
           interest: (formData.get("interest") as string) ?? "",
           message: (formData.get("message") as string) ?? "",
+          _subject: "New waitlist signup — 220.work",
         }),
       });
 
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
+        const fieldErrors = Array.isArray(data.errors)
+          ? data.errors
+              .map((err: { message?: string }) => err?.message)
+              .filter(Boolean)
+              .join(" — ")
+          : "";
         const message =
-          [data.error, data.detail].filter(Boolean).join(" — ") ||
+          fieldErrors ||
+          data.error ||
           `Submission failed (HTTP ${response.status})`;
         throw new Error(message);
       }
